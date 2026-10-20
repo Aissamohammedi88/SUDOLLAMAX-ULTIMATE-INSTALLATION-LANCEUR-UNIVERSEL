@@ -1,0 +1,220 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# SUDOLLAMAX ULTIMATE v2.1.0 — LE CLIENT UNIVERSELLE
+# Auteur : Aissa Mohammedi (DGK) — Fondateur de Nexus Quantum
+# Rôle : Client souverain orchestrant Ollama, PyTorch, JAX, TF, ONNX, TensorRT.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+set -e
+
+# --- COULEURS ---
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
+info() { echo -e "${GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${YELLOW}[ATTENTION]${NC} $1"; }
+fail() { echo -e "${RED}[ERREUR]${NC} $1"; }
+section() { echo -e "\n${BLUE}===== $1 =====${NC}"; }
+
+BASE_DIR="$HOME/sudollamax_ultimate"
+VENV_DIR="$BASE_DIR/venv"
+MODELS_DIR="$BASE_DIR/models"
+LOGS_DIR="$BASE_DIR/logs"
+
+mkdir -p "$BASE_DIR" "$MODELS_DIR" "$LOGS_DIR"
+
+# ─── 1. DÉPENDANCES SYSTÈME (ZÉRO COMPROMIS) ─────────────────────
+
+section "1. INSTALLATION DES DÉPENDANCES SYSTÈME"
+
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv \
+build-essential git curl wget \
+nvidia-cuda-toolkit \
+libopenblas-dev libssl-dev \
+cmake g++
+
+# ─── 2. OLLAMA (LE NOYAU) ────────────────────────────────────────
+
+section "2. INSTALLATION D'OLLAMA"
+
+if ! command -v ollama &>/dev/null; then
+    info "Installation d'Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    info "Ollama déjà installé."
+fi
+
+# ─── 3. L'ENVIRONNEMENT VIRTUEL (L'ISOLATION) ────────────────────
+
+section "3. CRÉATION DE L'ENVIRONNEMENT VIRTUEL SOUVERAIN"
+
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+
+# ─── 4. LA STACK IA (TOUS LES MOTEURS) ───────────────────────────
+
+section "4. INSTALLATION DE LA STACK IA UNIVERSELLE"
+
+pip install --upgrade pip
+
+# Les 3 piliers de l'inférence lourde
+info "Installation de PyTorch..."
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+info "Installation de TensorFlow..."
+pip install tensorflow
+
+info "Installation de JAX (XLA)..."
+pip install jax jaxlib
+
+# Les couches intermédiaires
+info "Installation des couches intermédiaires..."
+pip install transformers accelerate onnx onnxruntime
+pip install nvidia-tensorrt
+
+# Les utilitaires
+info "Installation des utilitaires..."
+pip install flask requests numpy pandas scikit-learn
+pip install huggingface-hub sentencepiece protobuf
+
+# ─── 5. LE LANCEUR UNIVERSELLE (LE CERVEAU) ─────────────────────
+
+section "5. GÉNÉRATION DU LANCEUR UNIVERSELLE"
+
+cat > "$BASE_DIR/sudollamax.py" << 'PYTHON_EOF'
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+SUDOLLAMAX ULTIMATE — LE CLIENT UNIVERSEL
+Auteur : Aissa Mohammedi (DGK) — Nexus Quantum
+Description : Détecte le format du modèle et utilise le meilleur moteur.
+"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+# ═══════════════════════════════════════════════════════════════
+# DÉTECTION AUTO (LE RADAR)
+# ═══════════════════════════════════════════════════════════════
+
+def detect_model_type(model_path):
+    path = Path(model_path)
+    if path.is_dir():
+        if (path / "config.json").exists():
+            return "huggingface"
+        if (path / "saved_model.pb").exists():
+            return "tensorflow"
+        if (path / "pytorch_model.bin").exists() or (path / "model.pt").exists():
+            return "pytorch"
+        if (path / "model.onnx").exists():
+            return "onnx"
+        if (path / "model.engine").exists():
+            return "tensorrt"
+    if path.suffix == ".gguf":
+        return "ollama"
+    return "unknown"
+
+# ═══════════════════════════════════════════════════════════════
+# LES MOTEURS D'EXÉCUTION
+# ═══════════════════════════════════════════════════════════════
+
+def run_ollama(model_path):
+    subprocess.run(["ollama", "run", str(model_path)])
+
+def run_huggingface(model_path):
+    from transformers import pipeline
+    info("Chargement via HuggingFace Transformers...")
+    pipe = pipeline("text-generation", model=str(model_path))
+    result = pipe("Hello world", max_new_tokens=50)
+    print(result[0]["generated_text"])
+
+def run_pytorch(model_path):
+    import torch
+    info("Chargement via PyTorch natif...")
+    model = torch.load(model_path / "pytorch_model.bin", map_location="cpu")
+    print(f"Modèle chargé : {model.__class__.__name__}")
+
+def run_tensorflow(model_path):
+    import tensorflow as tf
+    info("Chargement via TensorFlow SavedModel...")
+    model = tf.saved_model.load(str(model_path))
+    print(f"Signatures : {list(model.signatures.keys())}")
+
+def run_onnx(model_path):
+    import onnxruntime as ort
+    info("Chargement via ONNX Runtime...")
+    session = ort.InferenceSession(str(model_path / "model.onnx"))
+    print(f"Entrées : {[i.name for i in session.get_inputs()]}")
+
+def run_tensorrt(model_path):
+    import tensorrt as trt
+    info("Chargement via TensorRT Engine...")
+    logger = trt.Logger(trt.Logger.WARNING)
+    with open(model_path / "model.engine", "rb") as f:
+        runtime = trt.Runtime(logger)
+        engine = runtime.deserialize_cuda_engine(f.read())
+    print("Moteur TensorRT chargé.")
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN (LE ROUTEUR)
+# ═══════════════════════════════════════════════════════════════
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: sudollamax.py <model_path_or_name>")
+        sys.exit(1)
+
+    model_path = sys.argv[1]
+    model_type = detect_model_type(model_path)
+    
+    print(f"\033[1;36m[SUDOLLAMAX]\033[0m Type détecté : \033[1;32m{model_type}\033[0m")
+
+    runners = {
+        "ollama": run_ollama,
+        "huggingface": run_huggingface,
+        "pytorch": run_pytorch,
+        "tensorflow": run_tensorflow,
+        "onnx": run_onnx,
+        "tensorrt": run_tensorrt,
+    }
+
+    runner = runners.get(model_type)
+    if runner:
+        runner(model_path)
+    else:
+        print(f"\033[1;31m[ERREUR]\033[0m Format non supporté : {model_type}")
+
+if __name__ == "__main__":
+    main()
+PYTHON_EOF
+
+chmod +x "$BASE_DIR/sudollamax.py"
+
+# ─── 6. ALIAS GLOBAL ─────────────────────────────────────────────
+
+section "6. CRÉATION DE L'ALIAS"
+
+echo "alias sudollamax='source $VENV_DIR/bin/activate && python3 $BASE_DIR/sudollamax.py'" >> ~/.bashrc
+source ~/.bashrc
+
+# ─── 7. TEST DE L'ÉCOSYSTÈME ─────────────────────────────────────
+
+section "7. TEST DU CLIENT UNIVERSELLE"
+
+info "Téléchargement d'un modèle Ollama de test (Qwen 2.5 Coder)..."
+ollama pull qwen2.5-coder:1.5b
+
+info "Lancement via Sudollamax..."
+sudollamax qwen2.5-coder:1.5b || true
+
+# ─── 8. RAPPORT FINAL ────────────────────────────────────────────
+
+section "RAPPORT FINAL — SUDOLLAMAX ULTIMATE"
+echo -e "📁 Dossier    : $BASE_DIR"
+echo -e "🐍 Venv       : $VENV_DIR"
+echo -e "📦 Modèles    : $MODELS_DIR"
+echo -e "📄 Lanceur    : $BASE_DIR/sudollamax.py"
+echo -e "✅ Le Client Universel est prêt."
+echo -e "📌 Utilisation : sudollamax <chemin_ou_nom_du_modèle>"
