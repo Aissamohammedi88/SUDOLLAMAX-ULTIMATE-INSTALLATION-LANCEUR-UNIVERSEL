@@ -12,8 +12,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  workflows: write # <--- CRUCIAL : Autorise la modification des fichiers .yml dans .github/
-
 jobs:
   repair:
     name: "🔧 Scan & Repair"
