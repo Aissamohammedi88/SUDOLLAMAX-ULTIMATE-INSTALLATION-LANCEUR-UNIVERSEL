@@ -1,0 +1,89 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXUS AUTO-REPAIR — L'Usine de Nettoyage Souveraine
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stratégie :
+#   - Analyse tout le code (Python, YAML, JSON).
+#   - Détecte les erreurs de syntaxe et de formatage.
+#   - Applique des correctifs automatiques (Black pour Python, Prettier pour YAML/JSON).
+#   - Ouvre une Pull Request avec les corrections si nécessaire.
+# ═══════════════════════════════════════════════════════════════════════════════
+name: "🩺 Nexus Auto-Repair"
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  repair:
+    name: "🔧 Scan & Repair"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Setup Node (pour Prettier)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install black
+          npm install -g prettier
+
+      - name: "1. Repair Python (Black)"
+        continue-on-error: true
+        run: |
+          # Formate tous les fichiers Python du dépôt
+          find . -name "*.py" -not -path "*/node_modules/*" -not -path "*/.git/*" -exec black {} +
+
+      - name: "2. Repair YAML & JSON (Prettier)"
+        continue-on-error: true
+        run: |
+          # Formate tous les fichiers YAML et JSON
+          find . -name "*.yml" -o -name "*.yaml" -o -name "*.json" -not -path "*/node_modules/*" -not -path "*/.git/*" | xargs -r prettier --write
+
+      - name: "3. Vérifier si des modifications ont eu lieu"
+        id: check_changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+            echo "Des réparations ont été appliquées."
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+            echo "Aucune erreur détectée. Le code est déjà souverain."
+          fi
+      - name: "4. Ouvrir la Pull Request de réparation"
+        if: steps.check_changes.outputs.changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix(auto-repair): correction automatique du code [skip ci]"
+          title: "🩺 Auto-Repair : Correctifs appliqués"
+          body: |
+            ## 🤖 Rapport de l'Usine de Nettoyage
+            
+            Le robot Nexus a détecté des erreurs de syntaxe ou de formatage dans votre code.
+            Il a appliqué les outils suivants :
+            - **Black** : Formatage des fichiers Python.
+            - **Prettier** : Formatage des fichiers YAML et JSON.
+            
+            **Action requise :** Vérifiez les changements et mergez cette PR si tout est correct.
+          branch: auto-repair/fix-${{ github.run_id }}
+          delete-branch: true
+          labels: |
+            auto-repair
+            automated
